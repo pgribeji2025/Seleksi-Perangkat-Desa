@@ -551,6 +551,9 @@ export default function App() {
                       <div className="mt-1.5 text-4xl sm:text-6xl font-extrabold tracking-tight text-emerald-900">
                         SI-PRABU
                       </div>
+                      <p className="mt-1.5 text-base sm:text-xl font-extrabold tracking-tight text-slate-900">
+                        Sistem Informasi Penjaringan Perangkat Desa Baujeng
+                      </p>
                     </div>
 
                     <div className="pt-2 border-t border-slate-200/80 space-y-1 sm:space-y-1.5">
