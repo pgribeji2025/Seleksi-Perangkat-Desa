@@ -360,8 +360,7 @@ export default function App() {
       'Tes Tulis',
       'Baca Tulis Al-Quran',
       'Wawancara',
-      'Total Skor',
-      'Nilai Akhir Rata-Rata',
+      'Total Nilai Akhir',
       'Keterangan',
     ];
     const rows = sortedByRank.map((c) => [
@@ -372,7 +371,6 @@ export default function App() {
       c.scores.btq ?? '',
       c.scores.wawancara ?? '',
       c.totalAkumulasi,
-      c.nilaiAkhir,
       c.peringkat === 1 ? 'PERINGKAT 1 TERBAIK' : `PERINGKAT ${c.peringkat}`,
     ]);
     const csvContent =
@@ -740,18 +738,18 @@ export default function App() {
 
                             <div className="text-right shrink-0">
                               <div className="text-[10px] font-bold text-slate-500 uppercase">
-                                Nilai Akhir
+                                Total Nilai
                               </div>
                               <div className="text-lg font-extrabold font-mono-tabular text-emerald-700">
-                                {cand.nilaiAkhir.toFixed(2)}
+                                {cand.totalAkumulasi.toFixed(1)}
                               </div>
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-4 gap-1.5 rounded-xl bg-slate-50 border border-slate-200 p-2.5 text-center text-xs">
+                          <div className="grid grid-cols-3 gap-1.5 rounded-xl bg-slate-50 border border-slate-200 p-2.5 text-center text-xs">
                             <div>
                               <div className="text-[10px] text-slate-500 font-semibold">
-                                Tulis
+                                Tes Tulis
                               </div>
                               <div className="font-mono-tabular font-bold text-slate-900">
                                 {cand.scores.tulis?.toFixed(1) ?? '—'}
@@ -759,26 +757,18 @@ export default function App() {
                             </div>
                             <div className="border-x border-slate-200">
                               <div className="text-[10px] text-slate-500 font-semibold">
-                                BTQ
+                                BTQ Al-Qur'an
                               </div>
                               <div className="font-mono-tabular font-bold text-slate-900">
                                 {cand.scores.btq?.toFixed(1) ?? '—'}
                               </div>
                             </div>
-                            <div className="border-r border-slate-200">
+                            <div>
                               <div className="text-[10px] text-slate-500 font-semibold">
                                 Wawancara
                               </div>
                               <div className="font-mono-tabular font-bold text-slate-900">
                                 {cand.scores.wawancara?.toFixed(1) ?? '—'}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-[10px] text-slate-500 font-semibold">
-                                Total
-                              </div>
-                              <div className="font-mono-tabular font-extrabold text-amber-700">
-                                {cand.totalAkumulasi.toFixed(1)}
                               </div>
                             </div>
                           </div>
@@ -799,8 +789,7 @@ export default function App() {
                             Baca Tulis Al-Qur'an
                           </th>
                           <th className="py-3.5 px-4 text-right">Wawancara</th>
-                          <th className="py-3.5 px-4 text-right">Total Skor</th>
-                          <th className="py-3.5 px-4 text-right">Nilai Akhir</th>
+                          <th className="py-3.5 px-4 text-right">Total Nilai Akhir</th>
                           <th className="py-3.5 px-4">Keterangan</th>
                         </tr>
                       </thead>
@@ -865,11 +854,8 @@ export default function App() {
                                   ? cand.scores.wawancara.toFixed(1)
                                   : '—'}
                               </td>
-                              <td className="py-4 px-4 text-right font-mono-tabular font-bold text-slate-800">
-                                {cand.totalAkumulasi.toFixed(1)}
-                              </td>
                               <td className="py-4 px-4 text-right font-mono-tabular text-base font-extrabold text-emerald-700">
-                                {cand.nilaiAkhir.toFixed(2)}
+                                {cand.totalAkumulasi.toFixed(1)}
                               </td>
                               <td className="py-4 px-4">
                                 {isWinner ? (
@@ -1161,17 +1147,14 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* Card Footer: Automatic Total & Average Score */}
+                      {/* Card Footer: Automatic Total Score */}
                       <div className="px-4 sm:px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2">
                         <div>
                           <span className="text-[11px] font-extrabold text-slate-500 uppercase">
-                            Rata-Rata & Total
+                            Total Nilai
                           </span>
                           <div className="text-lg sm:text-xl font-extrabold font-mono-tabular text-emerald-800">
-                            {cand.nilaiAkhir.toFixed(2)}
-                            <span className="ml-1.5 text-xs font-bold text-slate-500">
-                              (Total: {cand.totalAkumulasi.toFixed(1)})
-                            </span>
+                            {cand.totalAkumulasi.toFixed(1)}
                           </div>
                         </div>
                         <div className="text-right shrink-0">

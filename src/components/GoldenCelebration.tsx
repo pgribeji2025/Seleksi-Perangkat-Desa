@@ -300,17 +300,14 @@ export const GoldenCelebration: React.FC<GoldenCelebrationProps> = ({
                 </div>
               </div>
 
-              {/* Total & Average */}
+              {/* Total Score */}
               <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
                 <div>
                   <div className="text-[11px] font-extrabold text-slate-500 uppercase">
-                    REKAPITULASI NILAI AKHIR TERPADU
+                    TOTAL NILAI AKHIR TERPADU
                   </div>
                   <div className="text-2xl sm:text-3xl font-extrabold font-mono-tabular text-emerald-700">
-                    {winner.nilaiAkhir.toFixed(2)}
-                    <span className="ml-2 text-xs sm:text-sm font-bold text-amber-600">
-                      (Total: {winner.totalAkumulasi.toFixed(1)})
-                    </span>
+                    {winner.totalAkumulasi.toFixed(1)}
                   </div>
                 </div>
                 <button
@@ -362,14 +359,9 @@ export const GoldenCelebration: React.FC<GoldenCelebrationProps> = ({
                 </div>
 
                 <div className="flex sm:flex-col items-center sm:items-end justify-between border-t sm:border-t-0 sm:border-l border-slate-200 pt-2.5 sm:pt-0 sm:pl-3 shrink-0">
-                  <div className="text-[11px] font-bold text-slate-500">Nilai Akhir</div>
-                  <div className="flex sm:flex-col items-baseline sm:items-end gap-2 sm:gap-0">
-                    <div className="text-lg sm:text-2xl font-extrabold font-mono-tabular text-emerald-700">
-                      {cand.nilaiAkhir.toFixed(2)}
-                    </div>
-                    <div className="text-xs font-mono-tabular font-bold text-amber-600">
-                      Total {cand.totalAkumulasi.toFixed(1)}
-                    </div>
+                  <div className="text-[11px] font-bold text-slate-500">Total Nilai</div>
+                  <div className="text-lg sm:text-2xl font-extrabold font-mono-tabular text-emerald-700">
+                    {cand.totalAkumulasi.toFixed(1)}
                   </div>
                 </div>
               </div>
