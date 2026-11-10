@@ -542,20 +542,25 @@ export default function App() {
               <div className="grid grid-cols-1 lg:grid-cols-12 items-stretch">
                 {/* Left Column: 3 Core Words (Integritas, Transparansi, Profesional) */}
                 <div className="lg:col-span-6 p-5 sm:p-10 lg:p-12 flex flex-col justify-center gap-6 sm:gap-8 bg-gradient-to-br from-white via-slate-50/50 to-emerald-50/30 text-center sm:text-left">
-                  <div className="space-y-3 sm:space-y-4">
-                    <div className="inline-flex items-center justify-center sm:justify-start gap-2 text-[11px] sm:text-xs font-extrabold tracking-wider text-emerald-800 uppercase">
-                      <Scale className="w-4 h-4 text-amber-600 shrink-0" />
-                      <span>SELEKSI PERANGKAT DESA BAUJENG</span>
+                  <div className="space-y-4 sm:space-y-5">
+                    <div>
+                      <div className="inline-flex items-center justify-center sm:justify-start gap-2 text-[11px] sm:text-xs font-extrabold tracking-widest text-emerald-800 uppercase">
+                        <Scale className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>SELEKSI PERANGKAT DESA BAUJENG</span>
+                      </div>
+                      <div className="mt-1.5 text-4xl sm:text-6xl font-extrabold tracking-tight text-emerald-900">
+                        SI-PRABU
+                      </div>
                     </div>
 
-                    <div className="space-y-1.5 sm:space-y-2">
-                      <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900 leading-tight">
+                    <div className="pt-2 border-t border-slate-200/80 space-y-1 sm:space-y-1.5">
+                      <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-slate-900 leading-tight">
                         Integritas.
                       </h2>
-                      <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-emerald-700 leading-tight">
+                      <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-emerald-700 leading-tight">
                         Transparansi.
                       </h2>
-                      <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-amber-600 leading-tight">
+                      <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-amber-600 leading-tight">
                         Profesional.
                       </h2>
                     </div>
