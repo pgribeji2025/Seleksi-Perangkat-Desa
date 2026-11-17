@@ -15,12 +15,15 @@ import {
   MessageSquare,
   Printer,
   RefreshCw,
+  Save,
   Scale,
   ShieldCheck,
   Sparkles,
   Trophy,
   UserCheck,
   Users,
+  X,
+  ZoomIn,
 } from 'lucide-react';
 import { Candidate, SelectionConfig } from './types';
 import {
@@ -32,7 +35,6 @@ import {
 } from './utils/scoreUtils';
 import { PemdaLogo } from './components/PemdaLogo';
 import { GoldenCelebration } from './components/GoldenCelebration';
-import heroBalaiDesaImg from './assets/images/balai_desa_baujeng_hero_1794313323424.jpg';
 import {
   fetchCandidatesFromSupabase,
   supabase,
@@ -40,8 +42,10 @@ import {
 } from './lib/supabase';
 
 const STORAGE_KEY_CANDIDATES = 'sipedes_baujeng_candidates_v3';
+const STORAGE_KEY_SAVED_MAP = 'sipedes_baujeng_saved_map_v3';
 const STORAGE_KEY_AUTH = 'sipedes_baujeng_auth_v3';
-const HERO_BALAI_DESA_IMG = heroBalaiDesaImg;
+const HERO_BALAI_DESA_IMG =
+  'https://lh3.googleusercontent.com/d/1rlyamBLrSh-tBtEzl6_5rQwPiNM_t4PZ';
 
 type MainView = 'landing' | 'dashboard';
 
@@ -106,9 +110,32 @@ export default function App() {
     }
   });
 
+  // Tracks whether each candidate's scores have been explicitly saved via "Simpan Nilai Peserta"
+  const [savedCandidateMap, setSavedCandidateMap] = useState<Record<string, boolean>>(() => {
+    try {
+      const savedMapStr = localStorage.getItem(STORAGE_KEY_SAVED_MAP);
+      if (savedMapStr) {
+        return JSON.parse(savedMapStr);
+      }
+    } catch {
+      // Ignore
+    }
+    const initialMap: Record<string, boolean> = {};
+    for (const c of candidates) {
+      initialMap[c.id] =
+        c.scores.tulis !== null &&
+        c.scores.btq !== null &&
+        c.scores.wawancara !== null;
+    }
+    return initialMap;
+  });
+
+  const [savingCandidateId, setSavingCandidateId] = useState<string | null>(null);
+
   // Controls whether the Admin explicitly clicked "Ubah Nilai" while all 9 scores are complete
   const [isEditingWhenComplete, setIsEditingWhenComplete] = useState(false);
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
+  const [previewCandidatePhoto, setPreviewCandidatePhoto] = useState<Candidate | null>(null);
   const syncTimeoutRef = useRef<number | null>(null);
 
   const scheduleSupabaseSync = (updatedCandidates: Candidate[], immediate = false) => {
@@ -128,10 +155,25 @@ export default function App() {
   useEffect(() => {
     let isMounted = true;
 
+    const syncFromRemote = (data: Candidate[]) => {
+      setCandidates(data);
+      setSavedCandidateMap((prev) => {
+        const next = { ...prev };
+        for (const c of data) {
+          const hasAllThree =
+            c.scores.tulis !== null &&
+            c.scores.btq !== null &&
+            c.scores.wawancara !== null;
+          next[c.id] = hasAllThree ? true : Boolean(prev[c.id] && hasAllThree);
+        }
+        return next;
+      });
+    };
+
     const loadInitial = async () => {
       const { data } = await fetchCandidatesFromSupabase();
       if (isMounted && data && data.length > 0) {
-        setCandidates(data);
+        syncFromRemote(data);
       }
     };
 
@@ -149,7 +191,7 @@ export default function App() {
         async () => {
           const { data } = await fetchCandidatesFromSupabase();
           if (isMounted && data && data.length > 0) {
-            setCandidates(data);
+            syncFromRemote(data);
           }
         }
       )
@@ -168,6 +210,14 @@ export default function App() {
       // Ignore storage quota errors
     }
   }, [candidates]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_SAVED_MAP, JSON.stringify(savedCandidateMap));
+    } catch {
+      // Ignore
+    }
+  }, [savedCandidateMap]);
 
   useEffect(() => {
     try {
@@ -212,16 +262,30 @@ export default function App() {
     [computedCandidates]
   );
 
-  const isAllComplete = totalFilledCount === 9;
+  const savedCompleteCandidatesCount = useMemo(
+    () =>
+      computedCandidates.filter(
+        (c) => c.filledCount === 3 && Boolean(savedCandidateMap[c.id])
+      ).length,
+    [computedCandidates, savedCandidateMap]
+  );
 
-  // Automatically open Page 2 (Halaman Hasil) the moment all 9 scores are filled
+  // Celebration only appears when ALL 9 scores are filled AND all 3 candidates up to the last candidate have been saved
+  const isAllComplete =
+    totalFilledCount === 9 &&
+    computedCandidates.length > 0 &&
+    computedCandidates.every(
+      (c) => c.filledCount === 3 && Boolean(savedCandidateMap[c.id])
+    );
+
+  // Automatically open Page 2 (Halaman Hasil & Perayaan) only when all candidates' scores are filled and saved
   useEffect(() => {
     if (isAllComplete) {
       setIsEditingWhenComplete(false);
     }
   }, [isAllComplete]);
 
-  // Show Hasil page automatically when all 9 scores are filled (unless Admin clicked "Ubah Nilai")
+  // Show Hasil page automatically when all 9 scores are filled & saved (unless Admin clicked "Ubah Nilai")
   const showResultPage = isAllComplete && !isEditingWhenComplete;
 
   // Login Handler (username: admin, password: adminbaujeng@1)
@@ -245,7 +309,7 @@ export default function App() {
     showToast('Anda telah keluar dari sesi Admin.');
   };
 
-  // Update a candidate's numeric score directly
+  // Update a candidate's numeric score in draft state; marks candidate as unsaved until "Simpan Nilai" is clicked
   const handleDirectScoreChange = (
     candidateId: string,
     subject: 'tulis' | 'btq' | 'wawancara',
@@ -259,8 +323,13 @@ export default function App() {
     const validNum =
       num !== null && !isNaN(num) ? Math.round(num * 100) / 100 : null;
 
-    setCandidates((prev) => {
-      const next = prev.map((c) => {
+    setSavedCandidateMap((prev) => ({
+      ...prev,
+      [candidateId]: false,
+    }));
+
+    setCandidates((prev) =>
+      prev.map((c) => {
         if (c.id !== candidateId) return c;
         return {
           ...c,
@@ -273,10 +342,52 @@ export default function App() {
             [subject]: valueStr,
           },
         };
-      });
-      scheduleSupabaseSync(next);
-      return next;
-    });
+      })
+    );
+  };
+
+  // Explicit Save Handler per Candidate ("Simpan Nilai Peserta")
+  const handleSaveCandidate = async (candidateId: string) => {
+    const target = candidates.find((c) => c.id === candidateId);
+    if (!target) return;
+
+    setSavingCandidateId(candidateId);
+    await upsertCandidatesToSupabase([target]);
+    setSavingCandidateId(null);
+
+    const isTargetAllThreeFilled =
+      target.scores.tulis !== null &&
+      target.scores.btq !== null &&
+      target.scores.wawancara !== null;
+
+    const nextSavedMap: Record<string, boolean> = {
+      ...savedCandidateMap,
+      [candidateId]: isTargetAllThreeFilled,
+    };
+    setSavedCandidateMap(nextSavedMap);
+
+    const willAllBeComplete = candidates.every(
+      (c) =>
+        c.scores.tulis !== null &&
+        c.scores.btq !== null &&
+        c.scores.wawancara !== null &&
+        Boolean(nextSavedMap[c.id])
+    );
+
+    if (willAllBeComplete) {
+      setIsEditingWhenComplete(false);
+      showToast(
+        'Seluruh nilai hingga peserta terakhir berhasil disimpan! Membuka Halaman Hasil & Perayaan.'
+      );
+    } else if (isTargetAllThreeFilled) {
+      showToast(
+        `Nilai peserta No. Urut ${target.nomorUrut} (${target.nama}) berhasil disimpan.`
+      );
+    } else {
+      showToast(
+        `Data peserta No. Urut ${target.nomorUrut} disimpan sebagian. Lengkapi 3 materi uji peserta ini untuk mengunci nilai.`
+      );
+    }
   };
 
   const handleCandidateFieldChange = (
@@ -320,13 +431,16 @@ export default function App() {
       scheduleSupabaseSync(next, true);
       return next;
     });
+    setSavedCandidateMap({});
     setIsEditingWhenComplete(false);
     showToast('Nilai berhasil direset. Silakan input kembali.');
   };
 
   const handleFillSampleScores = () => {
+    const nextSaved: Record<string, boolean> = {};
     setCandidates((prev) => {
       const next = prev.map((c, idx) => {
+        nextSaved[c.id] = true;
         const sample = SAMPLE_COMPLETE_SCORES[idx] || {
           tulis: 85,
           btq: 85,
@@ -346,9 +460,10 @@ export default function App() {
       scheduleSupabaseSync(next, true);
       return next;
     });
+    setSavedCandidateMap(nextSaved);
     setIsEditingWhenComplete(false);
     showToast(
-      'Seluruh nilai 3 calon terisi lengkap! Halaman Hasil & Perayaan terbuka.'
+      'Seluruh nilai 3 calon terisi & tersimpan lengkap! Halaman Hasil & Perayaan terbuka.'
     );
   };
 
@@ -448,13 +563,14 @@ export default function App() {
               </div>
             </div>
 
-            {/* Right / Bottom Zone: Responsive Navigation Switcher & Admin Status */}
+            {/* Right / Bottom Zone: Desktop/Tablet Navigation Switcher & Admin Status */}
             <div className="flex flex-col items-stretch sm:items-center lg:items-end gap-3 w-full lg:w-auto shrink-0 no-print">
-              <div className="grid grid-cols-2 sm:inline-flex items-center gap-1.5 rounded-xl bg-slate-100/90 p-1.5 border border-slate-200/90 w-full sm:w-auto">
+              {/* Desktop & Tablet Navigation Tabs (Hidden on Mobile, since Mobile uses Floating Bottom Nav) */}
+              <div className="hidden sm:inline-flex items-center gap-1.5 rounded-xl bg-slate-100/90 p-1.5 border border-slate-200/90 w-auto">
                 <button
                   type="button"
                   onClick={() => setMainView('landing')}
-                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 sm:py-2 text-xs font-extrabold transition-colors cursor-pointer ${
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-extrabold transition-colors cursor-pointer ${
                     mainView === 'landing'
                       ? 'bg-emerald-700 text-white shadow-2xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -466,7 +582,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setMainView('dashboard')}
-                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 sm:py-2 text-xs font-extrabold transition-colors cursor-pointer ${
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-extrabold transition-colors cursor-pointer ${
                     mainView === 'dashboard'
                       ? 'bg-emerald-700 text-white shadow-2xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -481,7 +597,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="col-span-2 sm:col-span-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-100 border border-amber-300 px-3 py-2 text-xs font-extrabold text-amber-950 hover:bg-amber-200 transition-colors cursor-pointer"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-100 border border-amber-300 px-3 py-2 text-xs font-extrabold text-amber-950 hover:bg-amber-200 transition-colors cursor-pointer"
                   >
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
                     <span>Keluar Admin</span>
@@ -498,7 +614,7 @@ export default function App() {
                     </div>
                     <div className="mt-0.5 flex items-center justify-center sm:justify-start gap-2">
                       <span className="text-sm font-extrabold font-mono-tabular text-emerald-700">
-                        {totalFilledCount} / 9 Nilai Terisi
+                        {totalFilledCount} / 9 Nilai Terisi · {savedCompleteCandidatesCount} / 3 Peserta Disimpan
                       </span>
                       {isAllComplete && (
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -506,8 +622,8 @@ export default function App() {
                     </div>
                     <div className="mt-0.5 text-[11px] font-semibold text-slate-500">
                       {isAllComplete
-                        ? 'Semua nilai lengkap — Halaman Hasil Terbuka'
-                        : 'Isi seluruh 9 nilai calon untuk membuka Halaman Hasil'}
+                        ? 'Seluruh nilai hingga peserta terakhir telah disimpan — Perayaan Terbuka'
+                        : 'Input & klik Simpan Nilai pada setiap peserta hingga peserta terakhir untuk membuka Perayaan'}
                     </div>
                   </div>
 
@@ -535,12 +651,37 @@ export default function App() {
            ===================================================================== */}
         {mainView === 'landing' ? (
           <main className="space-y-5 sm:space-y-7">
-            {/* Simple Hero Section with 3 Core Words & Balai Desa Photograph */}
+            {/* Hero Section: Balai Desa Photograph on Top, Followed by SI-PRABU & 3 Core Words */}
             <section className="rounded-2xl sm:rounded-3xl border border-slate-200/90 bg-white overflow-hidden shadow-xs">
-              <div className="grid grid-cols-1 lg:grid-cols-12 items-stretch">
-                {/* Left Column: 3 Core Words (Integritas, Transparansi, Profesional) */}
-                <div className="lg:col-span-6 p-5 sm:p-10 lg:p-12 flex flex-col justify-center gap-6 sm:gap-8 bg-gradient-to-br from-white via-slate-50/50 to-emerald-50/30 text-center sm:text-left">
-                  <div className="space-y-4 sm:space-y-5">
+              {/* Top Zone: Precision-Framed Balai Desa Baujeng Main Photograph */}
+              <div className="p-3 sm:p-6 lg:p-8 bg-gradient-to-br from-emerald-50/50 via-slate-50 to-amber-50/40 border-b border-slate-200/80">
+                <div className="mx-auto w-full max-w-4xl rounded-2xl overflow-hidden border-2 border-white ring-1 ring-slate-200/90 shadow-md bg-slate-900">
+                  <div className="relative aspect-[4/3] sm:aspect-[16/9] w-full overflow-hidden bg-slate-100">
+                    <img
+                      src={HERO_BALAI_DESA_IMG}
+                      alt="Balai Desa Baujeng Kecamatan Beji Kabupaten Pasuruan"
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        e.currentTarget.src = '/assets/balai_desa_baujeng.jpg';
+                      }}
+                      className="w-full h-full object-cover object-[50%_36%] transition-transform duration-500 hover:scale-[1.02]"
+                    />
+                  </div>
+                  <div className="bg-white px-4 py-2.5 border-t border-slate-200/80 flex items-center justify-between gap-2 text-xs">
+                    <span className="font-extrabold text-emerald-900 truncate">
+                      Balai Desa Baujeng
+                    </span>
+                    <span className="font-semibold text-slate-500 shrink-0">
+                      Kec. Beji · Kab. Pasuruan
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Zone: SI-PRABU Identity & 3 Core Words (Integritas, Transparansi, Profesional) */}
+              <div className="p-5 sm:p-8 lg:p-10 bg-gradient-to-br from-white via-slate-50/50 to-emerald-50/30">
+                <div className="mx-auto max-w-4xl flex flex-col md:flex-row md:items-center md:justify-between gap-6 text-center sm:text-left">
+                  <div className="space-y-4">
                     <div>
                       <div className="inline-flex items-center justify-center sm:justify-start gap-2 text-[11px] sm:text-xs font-extrabold tracking-widest text-emerald-800 uppercase">
                         <Scale className="w-4 h-4 text-amber-600 shrink-0" />
@@ -554,20 +695,20 @@ export default function App() {
                       </p>
                     </div>
 
-                    <div className="pt-2 border-t border-slate-200/80 space-y-1 sm:space-y-1.5">
-                      <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-slate-900 leading-tight">
+                    <div className="pt-3 border-t border-slate-200/80 flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1">
+                      <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-slate-900 leading-tight">
                         Integritas.
                       </h2>
-                      <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-emerald-700 leading-tight">
+                      <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-emerald-700 leading-tight">
                         Transparansi.
                       </h2>
-                      <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-amber-600 leading-tight">
+                      <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-amber-600 leading-tight">
                         Profesional.
                       </h2>
                     </div>
                   </div>
 
-                  <div>
+                  <div className="shrink-0">
                     <button
                       type="button"
                       onClick={() => setMainView('dashboard')}
@@ -581,16 +722,6 @@ export default function App() {
                       <ArrowRight className="w-4 h-4 text-amber-300 shrink-0" />
                     </button>
                   </div>
-                </div>
-
-                {/* Right Column: Relevant High-Resolution Balai Desa Photograph */}
-                <div className="lg:col-span-6 relative h-56 sm:h-80 lg:h-auto lg:min-h-[360px] bg-slate-900 overflow-hidden">
-                  <img
-                    src={HERO_BALAI_DESA_IMG}
-                    alt="Balai Desa dan Pendopo Pemerintahan Desa Baujeng Kabupaten Pasuruan"
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover"
-                  />
                 </div>
               </div>
             </section>
@@ -607,27 +738,29 @@ export default function App() {
                 </h3>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 sm:gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
                 {sortedByNomorUrut.map((cand) => (
                   <div
                     key={cand.id}
                     onClick={() => setMainView('dashboard')}
-                    className="group rounded-2xl border border-slate-200 bg-slate-50/60 p-3.5 sm:p-4 flex items-center gap-3.5 sm:gap-4 hover:border-emerald-500 hover:bg-white transition-all cursor-pointer"
+                    className="group rounded-2xl border border-slate-200 bg-slate-50/60 p-4 flex items-center gap-4 hover:border-emerald-500 hover:bg-white transition-all cursor-pointer"
                   >
-                    <img
-                      src={cand.fotoUrl}
-                      alt={cand.nama}
-                      referrerPolicy="no-referrer"
-                      className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl object-cover object-top border border-slate-300 shrink-0"
-                    />
+                    <div className="w-20 h-24 sm:w-24 sm:h-28 rounded-xl overflow-hidden border border-slate-300 bg-slate-100 shrink-0 shadow-2xs">
+                      <img
+                        src={cand.fotoUrl}
+                        alt={cand.nama}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-mono-tabular font-extrabold text-emerald-700">
+                      <div className="inline-flex items-center rounded-lg bg-amber-400/90 px-2.5 py-0.5 text-[11px] font-mono-tabular font-extrabold text-slate-950">
                         NOMOR URUT {cand.nomorUrut}
                       </div>
-                      <h4 className="text-sm sm:text-base font-extrabold text-slate-900 truncate group-hover:text-emerald-800">
+                      <h4 className="mt-1.5 text-sm sm:text-base font-extrabold text-slate-900 leading-snug group-hover:text-emerald-800">
                         {cand.nama}
                       </h4>
-                      <p className="text-xs text-slate-500 truncate">
+                      <p className="mt-0.5 text-xs text-slate-500 line-clamp-2">
                         {cand.alamat}
                       </p>
                     </div>
@@ -968,24 +1101,35 @@ export default function App() {
                       className="rounded-2xl border border-slate-200/90 bg-white overflow-hidden shadow-xs flex flex-col justify-between transition-all hover:border-emerald-300"
                     >
                       <div>
-                        {/* Candidate Photo & Identity */}
-                        <div className="relative h-60 sm:h-64 w-full bg-slate-100 overflow-hidden border-b border-slate-200">
+                        {/* Candidate Photo Frame — Unobstructed Formal Portrait Ratio */}
+                        <div className="relative aspect-[4/4] sm:aspect-[4/4] w-full bg-slate-100 overflow-hidden border-b border-slate-200 group">
                           <img
                             src={cand.fotoUrl}
                             alt={cand.nama}
                             referrerPolicy="no-referrer"
-                            className="h-full w-full object-cover object-top"
+                            onClick={() => setPreviewCandidatePhoto(cand)}
+                            className="h-full w-full object-cover object-top cursor-zoom-in transition-transform duration-300 group-hover:scale-[1.02]"
                           />
-                          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/15 to-transparent" />
 
                           {/* Nomor Urut Badge */}
-                          <div className="absolute top-3 left-3 rounded-xl bg-amber-400 px-3 py-1 text-xs font-mono-tabular font-extrabold text-slate-950 shadow-xs">
+                          <div className="absolute top-3 left-3 rounded-xl bg-amber-400 px-3 py-1.5 text-xs font-mono-tabular font-extrabold text-slate-950 shadow-sm border border-amber-300">
                             NO. URUT {cand.nomorUrut}
                           </div>
 
+                          {/* Zoom Photo Button */}
+                          <button
+                            type="button"
+                            onClick={() => setPreviewCandidatePhoto(cand)}
+                            title="Perbesar Foto Calon"
+                            className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-xl bg-slate-900/75 hover:bg-slate-900 text-white px-2.5 py-1.5 text-[11px] font-bold backdrop-blur-xs shadow-xs transition-colors cursor-pointer"
+                          >
+                            <ZoomIn className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                            <span>Perbesar Foto</span>
+                          </button>
+
                           {/* Upload Photo Button (Visible when Admin is logged in) */}
                           {isAdmin && (
-                            <label className="absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-xl bg-white/95 border border-slate-300 px-3 py-1.5 text-xs font-extrabold text-slate-900 shadow-xs hover:bg-amber-300 transition-colors cursor-pointer">
+                            <label className="absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-xl bg-white/95 border border-slate-300 px-3 py-1.5 text-xs font-extrabold text-slate-900 shadow-sm hover:bg-amber-300 transition-colors cursor-pointer">
                               <Camera className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
                               <span>Upload Foto</span>
                               <input
@@ -996,10 +1140,15 @@ export default function App() {
                               />
                             </label>
                           )}
+                        </div>
 
-                          {/* Candidate Name (Editable by Admin or Clean Display) */}
-                          <div className="absolute bottom-3 left-4 right-4 text-white">
-                            {isAdmin ? (
+                        {/* Candidate Name & Address Block (Below Photo so Face & Portrait Are Never Covered) */}
+                        <div className="px-4 sm:px-5 pt-4 pb-3 border-b border-slate-200/80 bg-white">
+                          {isAdmin ? (
+                            <div className="space-y-1.5">
+                              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-emerald-700">
+                                Nama Lengkap Calon
+                              </label>
                               <input
                                 type="text"
                                 value={cand.nama}
@@ -1010,18 +1159,18 @@ export default function App() {
                                     e.target.value
                                   )
                                 }
-                                className="w-full rounded-lg bg-white/95 px-2.5 py-1.5 text-sm font-extrabold text-slate-900 focus:outline-none"
+                                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm sm:text-base font-extrabold text-slate-900 focus:border-emerald-600 focus:bg-white focus:outline-none"
                                 placeholder="Nama Calon Perangkat Desa"
                               />
-                            ) : (
-                              <h3 className="text-base sm:text-lg font-extrabold leading-snug text-white">
-                                {cand.nama}
-                              </h3>
-                            )}
-                            <p className="mt-1 text-xs text-slate-200 truncate">
-                              {cand.alamat}
-                            </p>
-                          </div>
+                            </div>
+                          ) : (
+                            <h3 className="text-base sm:text-lg font-extrabold leading-snug text-slate-900">
+                              {cand.nama}
+                            </h3>
+                          )}
+                          <p className="mt-1 text-xs font-medium text-slate-500">
+                            {cand.alamat}
+                          </p>
                         </div>
 
                         {/* Admin Input for Nomor Urut + 3 Subject Scores */}
@@ -1144,6 +1293,41 @@ export default function App() {
                               </span>
                             )}
                           </div>
+                          {/* Tombol Simpan Nilai Peserta (Khusus Admin) */}
+                          {isAdmin && (
+                            <div className="pt-2">
+                              <button
+                                type="button"
+                                onClick={() => void handleSaveCandidate(cand.id)}
+                                disabled={savingCandidateId === cand.id}
+                                className={`w-full inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-extrabold shadow-xs transition-all cursor-pointer ${
+                                  cand.filledCount === 3 && savedCandidateMap[cand.id]
+                                    ? 'bg-emerald-100 border border-emerald-300 text-emerald-900 hover:bg-emerald-200'
+                                    : 'bg-emerald-700 text-white hover:bg-emerald-800'
+                                }`}
+                              >
+                                {cand.filledCount === 3 && savedCandidateMap[cand.id] ? (
+                                  <>
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                                    <span>
+                                      {savingCandidateId === cand.id
+                                        ? 'Menyimpan...'
+                                        : 'Nilai Peserta Tersimpan (3/3)'}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Save className="w-4 h-4 shrink-0" />
+                                    <span>
+                                      {savingCandidateId === cand.id
+                                        ? 'Menyimpan Nilai...'
+                                        : 'Simpan Nilai Peserta'}
+                                    </span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -1157,10 +1341,17 @@ export default function App() {
                             {cand.totalAkumulasi.toFixed(1)}
                           </div>
                         </div>
-                        <div className="text-right shrink-0">
-                          <span className="inline-flex items-center rounded-lg bg-white border border-slate-200 px-2.5 py-1 text-xs font-mono-tabular font-bold text-slate-700">
-                            {cand.filledCount}/3 Terisi
-                          </span>
+                        <div className="text-right shrink-0 flex items-center gap-1.5">
+                          {cand.filledCount === 3 && savedCandidateMap[cand.id] ? (
+                            <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-100 border border-emerald-300 px-2.5 py-1 text-xs font-mono-tabular font-extrabold text-emerald-800">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                              <span>Tersimpan</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center rounded-lg bg-white border border-slate-200 px-2.5 py-1 text-xs font-mono-tabular font-bold text-slate-700">
+                              {cand.filledCount}/3 Terisi
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1172,8 +1363,8 @@ export default function App() {
         )}
       </div>
 
-      {/* Modern Professional Footer */}
-      <footer className="mt-auto border-t border-slate-200 bg-white py-4 px-4 sm:px-6 text-xs font-semibold text-slate-500 no-print">
+      {/* Modern Professional Footer (with extra bottom spacing on mobile for floating bottom nav) */}
+      <footer className="mt-auto border-t border-slate-200 bg-white pt-4 pb-24 sm:pb-4 px-4 sm:px-6 text-xs font-semibold text-slate-500 no-print">
         <div className="mx-auto max-w-7xl flex flex-col sm:flex-row items-center justify-between gap-2 text-center sm:text-left">
           <div>
             Panitia Seleksi Perangkat {config.desa} · {config.kecamatan} · Pemerintah{' '}
@@ -1182,6 +1373,54 @@ export default function App() {
           <div className="text-emerald-800 font-bold">Formasi: {config.formasi}</div>
         </div>
       </footer>
+
+      {/* Floating Mobile Bottom Navigation Bar (Only visible on HP / mobile screens) */}
+      <nav
+        aria-label="Navigasi Utama Mobile"
+        className="fixed bottom-3 left-3 right-3 z-40 sm:hidden no-print"
+      >
+        <div className="mx-auto max-w-md rounded-2xl border border-emerald-200/90 bg-white/95 backdrop-blur-md p-1.5 shadow-xl ring-1 ring-slate-900/10 flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setMainView('landing')}
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-extrabold transition-all cursor-pointer ${
+              mainView === 'landing'
+                ? 'bg-emerald-700 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            }`}
+          >
+            <Building2 className="w-4 h-4 shrink-0" />
+            <span className="truncate">Beranda Publik</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMainView('dashboard')}
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-extrabold transition-all cursor-pointer ${
+              mainView === 'dashboard'
+                ? 'bg-emerald-700 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            }`}
+          >
+            <LayoutDashboard className="w-4 h-4 shrink-0" />
+            <span className="truncate">
+              {isAllComplete ? 'Hasil Seleksi' : 'Dashboard Calon'}
+            </span>
+          </button>
+
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={handleLogout}
+              title="Keluar Admin"
+              className="inline-flex items-center justify-center gap-1 rounded-xl bg-amber-100 border border-amber-300 px-3 py-2.5 text-xs font-extrabold text-amber-950 hover:bg-amber-200 transition-colors cursor-pointer shrink-0"
+            >
+              <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
+              <span>Keluar</span>
+            </button>
+          )}
+        </div>
+      </nav>
 
       {/* Admin Login Modal (Triggered by 3 clicks on Lambang Kabupaten Pasuruan) */}
       {showLoginModal && (
@@ -1253,6 +1492,54 @@ export default function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Candidate Photo Lightbox Modal (Full Clear Portrait View) */}
+      {previewCandidatePhoto && (
+        <div
+          onClick={() => setPreviewCandidatePhoto(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-xs"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-2xl"
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="rounded-lg bg-amber-400 px-2.5 py-0.5 text-xs font-mono-tabular font-extrabold text-slate-950 shrink-0">
+                  NO. URUT {previewCandidatePhoto.nomorUrut}
+                </span>
+                <h3 className="text-sm font-extrabold text-slate-900 truncate">
+                  {previewCandidatePhoto.nama}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewCandidatePhoto(null)}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Tutup</span>
+              </button>
+            </div>
+            <div className="bg-slate-100 aspect-square w-full overflow-hidden">
+              <img
+                src={previewCandidatePhoto.fotoUrl}
+                alt={previewCandidatePhoto.nama}
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-cover object-top"
+              />
+            </div>
+            <div className="p-4 bg-white text-center">
+              <div className="text-base font-extrabold text-slate-900">
+                {previewCandidatePhoto.nama}
+              </div>
+              <div className="mt-0.5 text-xs font-medium text-slate-500">
+                {previewCandidatePhoto.alamat}
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -236,7 +236,7 @@ export const GoldenCelebration: React.FC<GoldenCelebrationProps> = ({
           {/* Peringkat 1 Card */}
           <div className="lg:col-span-7 rounded-2xl border-2 border-amber-400 bg-white p-4 sm:p-6 shadow-md flex flex-col sm:flex-row items-center gap-5 sm:gap-6">
             <div className="relative shrink-0 mt-2 sm:mt-0">
-              <div className="w-36 h-36 sm:w-44 sm:h-44 rounded-2xl overflow-hidden border-4 border-amber-400 shadow-md bg-emerald-50">
+              <div className="w-40 h-44 sm:w-48 sm:h-52 rounded-2xl overflow-hidden border-4 border-amber-400 shadow-md bg-emerald-50">
                 <img
                   src={winner.fotoUrl}
                   alt={winner.nama}
