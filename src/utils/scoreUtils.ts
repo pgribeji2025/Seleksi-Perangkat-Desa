@@ -16,9 +16,9 @@ export const DEFAULT_CONFIG: SelectionConfig = {
   formasi: 'Kepala Kewilayahan (Kawil) Dusun Tanggul',
   tahunAnggaran: '2026',
   tanggalSeleksi: '10 November 2026',
-  ketuaPanitia: 'H. Mochammad Choirul Anam, S.Sos.',
-  sekretarisPanitia: 'Lutfi Hakim, S.AP.',
-  kepalaDesa: 'H. Sobirin',
+  ketuaPanitia: 'Zainul Arifin',
+  sekretarisPanitia: 'Akhmad Nasor',
+  kepalaDesa: 'H. Ach Sobik',
   modeHitung: 'rata_rata',
   bobot: {
     tulis: 40,
